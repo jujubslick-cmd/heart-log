@@ -13,6 +13,7 @@ Not affiliated with any wearable maker. Not a medical device. All scores are est
 5. **Use the standard Bluetooth Heart Rate service,** so a chest strap or armband can replace the band without losing the app or its history.
 6. **Backup and restore come early,** because phone browser storage can be erased.
 7. **The web address stays the same,** because browser storage is tied to it.
+8. **The page may not contact any server.** A Content-Security-Policy blocks all network requests and outside scripts, and its script hash must be regenerated whenever the page script changes. No analytics, ads or third-party libraries.
 
 ## Hosting
 
