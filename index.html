@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Overnight Test</title>
+<style>
+:root{--bg:#0b0f12;--card:#151b20;--line:#27313a;--text:#eef2f5;--dim:#92a0ac;--accent:#57d9a3;--warn:#f5b84b;--bad:#ff7a70;--blue:#6db3f2}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 48px}
+h1{font-size:22px;margin:4px 0 2px}
+.sub{color:var(--dim);font-size:14px;margin:0 0 16px}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.bpm{display:flex;align-items:baseline;gap:8px}
+#bpm{font-size:68px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.unit{color:var(--dim)}
+canvas{display:block;width:100%;height:96px;margin-top:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.k{font-size:12px;color:var(--dim)}
+.v{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.ok{color:var(--accent)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+button{width:100%;min-height:48px;border:0;border-radius:12px;font:600 16px inherit;font-family:inherit;background:var(--accent);color:#06281a;cursor:pointer;padding:10px 14px}
+button.alt{background:#26323b;color:var(--text)}
+button.stop{background:#3a2322;color:#ffb3ad}
+button:disabled{opacity:.45}
+.row{display:flex;gap:10px;margin-top:10px}
+.row button{flex:1}
+label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+select,input{width:100%;min-height:44px;background:#0f1418;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:16px inherit;font-family:inherit}
+.note{font-size:14px;color:var(--dim);margin:10px 0 0}
+#notice{display:none;font-size:14px;margin-top:10px}
+ol{margin:0;padding-left:20px;font-size:15px}li{margin:5px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;margin:10px 0 0;color:#cfd8df}
+textarea{width:100%;height:150px;margin-top:10px;background:#0f1418;color:var(--text);border:1px solid var(--line);border-radius:10px;font:12px ui-monospace,Menlo,monospace;display:none}
+#night{position:fixed;inset:0;background:#000;color:#20262b;display:none;align-items:center;justify-content:center;text-align:center;z-index:9;font-size:14px;padding:24px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Overnight Test</h1>
+  <p class="sub">Records heart rate from your band to this phone. It only listens and never changes anything on the band.</p>
+
+  <section class="card">
+    <div class="bpm"><span id="bpm">--</span><span class="unit">bpm</span></div>
+    <canvas id="chart" aria-label="Heart rate, last ten minutes"></canvas>
+  </section>
+
+  <section class="card">
+    <div class="grid">
+      <div><div class="k">Band</div><div class="v" id="band">Not connected</div></div>
+      <div><div class="k">Battery</div><div class="v" id="battery">Unknown</div></div>
+      <div><div class="k">Recording for</div><div class="v" id="elapsed">0:00</div></div>
+      <div><div class="k">Captured</div><div class="v" id="coverage">None yet</div></div>
+      <div><div class="k">Beat timing (R-R)</div><div class="v" id="rr">None yet</div></div>
+      <div><div class="k">Keep screen on</div><div class="v" id="wake">Not started</div></div>
+    </div>
+    <div id="notice" class="warn"></div>
+  </section>
+
+  <section class="card">
+    <label for="profile">Whose band is this?</label>
+    <select id="profile"></select>
+    <div style="height:10px"></div>
+    <label for="pname">Name for this profile</label>
+    <input id="pname" maxlength="24" autocomplete="off">
+    <div style="height:12px"></div>
+    <button id="start">Connect band and start</button>
+    <div class="row">
+      <button id="nightBtn" class="alt" disabled>Dim screen</button>
+      <button id="stop" class="stop" disabled>Stop and see report</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Before bed</h2>
+    <ol>
+      <li>Force-quit the WHOOP app and turn its Bluetooth off.</li>
+      <li>On iPhone, set Settings, Display &amp; Brightness, Auto-Lock to Never, and plug in the phone. Set it back in the morning.</li>
+      <li>Put the phone close to your bed, with Bluefy open on this page.</li>
+      <li>Tap the band to wake it, tap Connect, and choose your WHOOP.</li>
+      <li>Wait for a heart rate, then tap Dim screen.</li>
+    </ol>
+  </section>
+
+  <section class="card" id="reportCard" style="display:none">
+    <h2>Report</h2>
+    <select id="sessions" aria-label="Choose a recording"></select>
+    <pre id="report"></pre>
+    <div class="row"><button id="copy">Copy report</button><button id="copyMin" class="alt">Copy minute data</button></div>
+    <div class="row"><button id="file" class="alt">Save full data file</button></div>
+    <textarea id="fallback" readonly aria-label="Text to copy"></textarea>
+    <p class="note" id="copied"></p>
+  </section>
+</main>
+<div id="night">Recording. Tap to wake the screen.</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const HR = 'heart_rate', HRM = 'heart_rate_measurement', BAT = 'battery_service', BATL = 'battery_level';
+const GAP_MS = 10000, STALL_MS = 30000, TICK_MS = 5000;
+
+/* ---- small helpers ---- */
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const fmtDur = ms => { const m = Math.round(ms / 60000); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+const fmtTime = t => new Date(t).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+const fmtDate = t => new Date(t).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+const setV = (id, text, cls) => { const e = $(id); e.textContent = text; e.className = 'v' + (cls ? ' ' + cls : ''); };
+const timeout = (p, ms, what) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error(what + ' timed out')), ms))]);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---- parsing: Bluetooth SIG Heart Rate Measurement (0x2A37) ---- */
+function parseHR(dv){
+  const f = dv.getUint8(0); let i = 1, hr;
+  if (f & 1) { hr = dv.getUint16(i, true); i += 2; } else { hr = dv.getUint8(i); i += 1; }
+  if (f & 8) i += 2;
+  const rr = [];
+  if (f & 16) for (; i + 1 < dv.byteLength; i += 2) rr.push(Math.round(dv.getUint16(i, true) * 1000 / 1024));
+  const contact = (f & 4) ? !!(f & 2) : null;
+  return {hr, rr, contact};
+}
+
+/* ---- local database, raw data stays on this phone ---- */
+let db = null, memOnly = false;
+const mem = {samples: [], events: [], sessions: new Map()};
+function openDB(){
+  return new Promise(res => {
+    let q; try { q = indexedDB.open('heart-log', 1); } catch { memOnly = true; return res(); }
+    q.onupgradeneeded = () => {
+      const d = q.result;
+      d.createObjectStore('sessions', {keyPath: 'id'});
+      for (const n of ['samples', 'events'])
+        d.createObjectStore(n, {autoIncrement: true}).createIndex('session', 'session');
+    };
+    q.onsuccess = () => { db = q.result; res(); };
+    q.onerror = () => { memOnly = true; res(); };
+  });
+}
+function putMany(name, rows){
+  if (!rows.length) return Promise.resolve();
+  if (memOnly) { mem[name].push(...rows); return Promise.resolve(); }
+  return new Promise((res, rej) => {
+    const tx = db.transaction(name, 'readwrite'), s = tx.objectStore(name);
+    rows.forEach(r => s.add(r)); tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+function saveSession(x){
+  if (memOnly) { mem.sessions.set(x.id, x); return Promise.resolve(); }
+  return new Promise((res, rej) => { const tx = db.transaction('sessions', 'readwrite'); tx.objectStore('sessions').put(x); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+}
+function allSessions(){
+  if (memOnly) return Promise.resolve([...mem.sessions.values()]);
+  return new Promise((res, rej) => { const q = db.transaction('sessions').objectStore('sessions').getAll(); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+}
+function bySession(name, id){
+  if (memOnly) return Promise.resolve(mem[name].filter(r => r.session === id));
+  return new Promise((res, rej) => { const q = db.transaction(name).objectStore(name).index('session').getAll(id); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+}
+
+/* ---- recording state ---- */
+let session = null, device = null, batChar = null, wakeLock = null;
+let sBuf = [], eBuf = [], recent = [], stats = null;
+let running = false, connecting = false, lastSample = 0, lastTick = 0, lastBat = 0, lastPaint = 0;
+
+function logEvent(type, detail){
+  if (!session) return;
+  eBuf.push({session: session.id, t: Date.now(), type, detail: detail === undefined ? null : detail});
+}
+let flushing = Promise.resolve();
+function flush(){
+  const s = sBuf, e = eBuf; sBuf = []; eBuf = [];
+  flushing = flushing.then(() => Promise.all([putMany('samples', s), putMany('events', e)])).catch(err => {
+    sBuf = s.concat(sBuf); eBuf = e.concat(eBuf); notice('Could not save to the phone: ' + err.message);
+  });
+  return flushing;
+}
+function notice(t){ const n = $('notice'); n.textContent = t; n.style.display = t ? 'block' : 'none'; }
+
+function onHR(ev){
+  const {hr, rr, contact} = parseHR(ev.target.value), t = Date.now();
+  if (stats.lastT && t - stats.lastT < GAP_MS) stats.covered += t - stats.lastT;
+  stats.lastT = t; stats.samples++; if (rr.length) stats.withRR++;
+  lastSample = t;
+  sBuf.push({session: session.id, t, hr, rr, contact});
+  recent.push([t, hr]);
+  if (recent.length > 800) recent.splice(0, 200);
+  $('bpm').textContent = hr || '--';
+  if (t - lastPaint > 2000) paint();
+}
+function paint(){
+  lastPaint = Date.now();
+  const el = lastPaint - session.start;
+  setV('elapsed', fmtDur(el));
+  if (el > 30000) {
+    const pct = Math.min(100, Math.round(100 * stats.covered / el));
+    setV('coverage', pct + '%', pct >= 90 ? 'ok' : pct >= 60 ? 'warn' : 'bad');
+  }
+  if (stats.samples) setV('rr', stats.withRR ? Math.round(100 * stats.withRR / stats.samples) + '% of readings' : 'Not received yet', stats.withRR ? 'ok' : 'warn');
+  draw();
+}
+function draw(){
+  const c = $('chart'), r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  c.width = r.width * d; c.height = r.height * d;
+  const g = c.getContext('2d'); g.scale(d, d);
+  const now = Date.now(), pts = recent.filter(p => p[1] > 0 && now - p[0] < 600000);
+  if (pts.length < 2) return;
+  const hs = pts.map(p => p[1]), lo = Math.min(...hs) - 5, hi = Math.max(...hs) + 5;
+  g.strokeStyle = '#6db3f2'; g.lineWidth = 2; g.beginPath();
+  let prev = 0;
+  pts.forEach((p, i) => {
+    const x = r.width * (1 - (now - p[0]) / 600000), y = r.height - r.height * (p[1] - lo) / (hi - lo);
+    if (!i || p[0] - prev > GAP_MS) g.moveTo(x, y); else g.lineTo(x, y);
+    prev = p[0];
+  });
+  g.stroke();
+}
+
+/* ---- Bluetooth ---- */
+async function readBattery(){
+  lastBat = Date.now();
+  if (!batChar) return;
+  try {
+    const v = (await timeout(batChar.readValue(), 8000, 'battery')).getUint8(0);
+    setV('battery', v + '%', v <= 20 ? 'warn' : 'ok');
+    logEvent('battery', v);
+    session.batteryOK = true;
+  } catch (e) { logEvent('battery_error', e.message); }
+}
+async function connectGatt(){
+  if (connecting || !running) return false;
+  connecting = true;
+  setV('band', 'Connecting');
+  try {
+    const srv = await timeout(device.gatt.connect(), 15000, 'connect');
+    const hs = await timeout(srv.getPrimaryService(HR), 10000, 'heart rate service');
+    const ch = await timeout(hs.getCharacteristic(HRM), 10000, 'heart rate reading');
+    ch.removeEventListener('characteristicvaluechanged', onHR);
+    ch.addEventListener('characteristicvaluechanged', onHR);
+    await timeout(ch.startNotifications(), 10000, 'start readings');
+    lastSample = Date.now();
+    setV('band', device.name || 'Connected', 'ok');
+    logEvent('connected', device.name || null);
+    try {
+      const bs = await timeout(srv.getPrimaryService(BAT), 8000, 'battery service');
+      batChar = await timeout(bs.getCharacteristic(BATL), 8000, 'battery level');
+      await readBattery();
+    } catch (e) {
+      batChar = null;
+      if (!session.batteryOK) setV('battery', 'Not available', 'warn');
+      logEvent('battery_unavailable', e.message);
+    }
+    return true;
+  } catch (e) {
+    logEvent('connect_failed', e.message);
+    setV('band', 'Retrying', 'warn');
+    return false;
+  } finally { connecting = false; }
+}
+let reconnecting = false;
+async function reconnectLoop(){
+  if (reconnecting) return;
+  reconnecting = true;
+  const delays = [1, 2, 5, 10, 20, 30];
+  for (let i = 0; running && !(device.gatt && device.gatt.connected && Date.now() - lastSample < STALL_MS); i++) {
+    await wait(delays[Math.min(i, delays.length - 1)] * 1000);
+    if (running && await connectGatt()) break;
+  }
+  reconnecting = false;
+}
+function onDisconnect(){
+  if (!running) return;
+  logEvent('disconnected');
+  setV('band', 'Lost, reconnecting', 'warn');
+  reconnectLoop();
+}
+async function keepAwake(){
+  try {
+    if (!('wakeLock' in navigator)) throw new Error('unsupported');
+    wakeLock = await navigator.wakeLock.request('screen');
+    setV('wake', 'On', 'ok'); logEvent('wakelock', 'on');
+  } catch (e) {
+    setV('wake', 'Use Auto-Lock: Never', 'warn'); logEvent('wakelock', e.message);
+  }
+}
+function tick(){
+  if (!running) return;
+  const now = Date.now();
+  if (lastTick && now - lastTick > TICK_MS * 4) logEvent('page_paused', Math.round((now - lastTick) / 1000));
+  lastTick = now;
+  if (device.gatt.connected && lastSample && now - lastSample > STALL_MS && !reconnecting) {
+    logEvent('stalled');
+    setV('band', 'No data, reconnecting', 'warn');
+    try { device.gatt.disconnect(); } catch {}
+    reconnectLoop();
+  }
+  if (device.gatt.connected && batChar && now - lastBat > 600000) readBattery();
+  paint();
+  session.end = now; session.covered = stats.covered;
+  flush(); saveSession(session);
+}
+
+/* ---- buttons ---- */
+let timer = null;
+async function start(){
+  if (!navigator.bluetooth) { notice('This browser has no Bluetooth access. On iPhone, open this page in Bluefy.'); return; }
+  notice('');
+  let d;
+  try {
+    d = await navigator.bluetooth.requestDevice({filters: [{services: [HR]}], optionalServices: [BAT]});
+  } catch (e) {
+    if (e.name !== 'NotFoundError') notice('Could not open the device list: ' + e.message);
+    return;
+  }
+  device = d;
+  const pid = $('profile').value, profs = profiles();
+  if (profs[pid].device && device.name && profs[pid].device !== device.name)
+    notice('Check this is the right band: this profile last used ' + profs[pid].device + ', and this is ' + device.name + '.');
+  if (device.name) { profs[pid].device = device.name; store.set('profiles', profs); }
+  session = {id: 's' + Date.now(), profile: pid, profileName: profs[pid].name, start: Date.now(), end: Date.now(), device: device.name || null, covered: 0, ua: navigator.userAgent};
+  stats = {samples: 0, withRR: 0, covered: 0, lastT: 0};
+  recent = []; lastTick = 0; lastSample = 0;
+  running = true;
+  await saveSession(session);
+  device.removeEventListener('gattserverdisconnected', onDisconnect);
+  device.addEventListener('gattserverdisconnected', onDisconnect);
+  $('start').disabled = true; $('stop').disabled = false; $('nightBtn').disabled = false;
+  $('profile').disabled = true;
+  keepAwake();
+  timer = setInterval(tick, TICK_MS);
+  if (!await connectGatt()) reconnectLoop();
+}
+async function stop(){
+  running = false; clearInterval(timer);
+  try { if (device.gatt.connected) { if (batChar) await readBattery(); device.gatt.disconnect(); } } catch {}
+  logEvent('stopped');
+  session.end = Date.now(); session.covered = stats.covered; session.done = true;
+  await flush(); await saveSession(session);
+  try { if (wakeLock) await wakeLock.release(); } catch {}
+  const id = session.id; session = null;
+  $('start').disabled = false; $('stop').disabled = true; $('nightBtn').disabled = true; $('profile').disabled = false;
+  $('bpm').textContent = '--'; setV('band', 'Not connected'); setV('wake', 'Not started');
+  await refreshSessions(id);
+  $('reportCard').scrollIntoView({behavior: 'smooth'});
+}
+
+/* ---- analysis ---- */
+function rmssd(rr){
+  const clean = rr.filter(x => x >= 300 && x <= 2000), diffs = [];
+  for (let i = 1; i < clean.length; i++)
+    if (Math.abs(clean[i] - clean[i-1]) / clean[i-1] <= 0.2) diffs.push(clean[i] - clean[i-1]);
+  if (diffs.length < 30) return null;
+  return Math.sqrt(diffs.reduce((a, d) => a + d * d, 0) / diffs.length);
+}
+const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+function nightHRV(samples){
+  const epochs = new Map();
+  for (const s of samples) {
+    const h = new Date(s.t).getHours();
+    if (h < 2 || h >= 6 || !s.rr.length) continue;
+    const k = Math.floor(s.t / 300000);
+    if (!epochs.has(k)) epochs.set(k, []);
+    epochs.get(k).push(...s.rr);
+  }
+  const vals = [...epochs.values()].map(rmssd).filter(v => v !== null);
+  return {value: median(vals), epochs: vals.length};
+}
+function analyze(sess, samples, events){
+  samples.sort((a, b) => a.t - b.t);
+  const dur = sess.end - sess.start, gaps = [];
+  let covered = 0, prev = sess.start;
+  for (const s of samples) {
+    const d = s.t - prev;
+    if (d >= GAP_MS) gaps.push({from: prev, to: s.t, ms: d}); else covered += d;
+    prev = s.t;
+  }
+  if (sess.end - prev >= GAP_MS) gaps.push({from: prev, to: sess.end, ms: sess.end - prev});
+  const valid = samples.filter(s => s.hr > 0), hrs = valid.map(s => s.hr);
+  const withRR = samples.filter(s => s.rr.length).length;
+  const count = t => events.filter(e => e.type === t).length;
+  const bats = events.filter(e => e.type === 'battery');
+  const noContact = samples.filter(s => s.contact === false).length;
+  const pct = dur ? Math.min(100, 100 * covered / dur) : 0;
+  const hrv = nightHRV(samples);
+  const hours = new Map();
+  for (const s of samples) { const k = Math.floor(s.t / 3600000); hours.set(k, (hours.get(k) || 0) + 1); }
+  return {dur, covered, pct, gaps, count, bats, noContact, withRR, hrv, hours, n: samples.length,
+    hrAvg: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null,
+    hrMin: hrs.length ? Math.min(...hrs) : null, hrMax: hrs.length ? Math.max(...hrs) : null};
+}
+function reportText(sess, a, events){
+  const big = [...a.gaps].sort((x, y) => y.ms - x.ms).slice(0, 8).sort((x, y) => x.from - y.from);
+  const verdict = a.pct >= 90 ? 'GOOD: enough for overnight tracking' : a.pct >= 60 ? 'PARTIAL: usable with holes' : 'POOR: the connection did not hold';
+  const wl = events.find(e => e.type === 'wakelock');
+  const bf = a.bats[0], bl = a.bats[a.bats.length - 1];
+  const L = [
+    'OVERNIGHT TEST REPORT',
+    'Profile: ' + sess.profileName + (sess.device ? ' (' + sess.device + ')' : ''),
+    'Started: ' + fmtDate(sess.start) + '   Ended: ' + fmtDate(sess.end),
+    'Length: ' + fmtDur(a.dur) + '   Captured: ' + fmtDur(a.covered) + ' (' + a.pct.toFixed(1) + '%)',
+    'Result: ' + verdict,
+    '',
+    'Readings: ' + a.n + '   With beat timing: ' + (a.n ? Math.round(100 * a.withRR / a.n) : 0) + '%',
+    'Heart rate low/avg/high: ' + a.hrMin + ' / ' + a.hrAvg + ' / ' + a.hrMax,
+    'HRV, 2 to 6 a.m.: ' + (a.hrv.value ? a.hrv.value.toFixed(1) + ' ms (' + a.hrv.epochs + ' five-minute windows)' : 'not enough data'),
+    'Readings marked no skin contact: ' + a.noContact,
+    'Battery: ' + (a.bats.length ? bf.detail + '% to ' + bl.detail + '% (' + a.bats.length + ' checks)' : 'not available'),
+    'Keep-screen-on: ' + (wl ? wl.detail : 'unknown'),
+    'Disconnects: ' + a.count('disconnected') + '   Stalls: ' + a.count('stalled') + '   Failed reconnects: ' + a.count('connect_failed') + '   Page pauses: ' + a.count('page_paused'),
+    'Gaps over 10 sec: ' + a.gaps.length + ', total ' + fmtDur(a.gaps.reduce((s, g) => s + g.ms, 0))
+  ];
+  if (big.length) { L.push('Largest gaps:'); big.forEach(g => L.push('  ' + fmtTime(g.from) + ' to ' + fmtTime(g.to) + ' (' + Math.round(g.ms / 1000) + ' sec)')); }
+  L.push('Readings per hour:');
+  [...a.hours.keys()].sort((x, y) => x - y).forEach(k => L.push('  ' + fmtTime(k * 3600000) + ': ' + a.hours.get(k)));
+  L.push('Browser: ' + (sess.ua || 'unknown'));
+  return L.join('\n');
+}
+function minuteData(samples){
+  const m = new Map();
+  for (const s of samples) { const k = Math.floor(s.t / 60000); if (!m.has(k)) m.set(k, {h: [], r: []}); const o = m.get(k); if (s.hr > 0) o.h.push(s.hr); o.r.push(...s.rr); }
+  const L = ['minute,avg_hr,readings,rmssd_ms'];
+  [...m.keys()].sort((a, b) => a - b).forEach(k => {
+    const o = m.get(k), avg = o.h.length ? Math.round(o.h.reduce((a, b) => a + b, 0) / o.h.length) : '', r = rmssd(o.r);
+    L.push(new Date(k * 60000).toISOString().slice(0, 16) + ',' + avg + ',' + o.h.length + ',' + (r ? r.toFixed(1) : ''));
+  });
+  return L.join('\n');
+}
+
+/* ---- report UI ---- */
+let current = null;
+async function refreshSessions(pick){
+  const list = (await allSessions()).sort((a, b) => b.start - a.start), sel = $('sessions');
+  sel.textContent = '';
+  list.forEach(s => { const o = document.createElement('option'); o.value = s.id; o.textContent = s.profileName + ', ' + fmtDate(s.start) + (s.done ? '' : ' (not stopped)'); sel.appendChild(o); });
+  $('reportCard').style.display = list.length ? 'block' : 'none';
+  if (list.length) { sel.value = pick || list[0].id; await show(sel.value); }
+}
+async function show(id){
+  const sess = (await allSessions()).find(s => s.id === id);
+  const [samples, events] = await Promise.all([bySession('samples', id), bySession('events', id)]);
+  if (!sess.done && samples.length) sess.end = Math.max(sess.end, samples[samples.length - 1].t);
+  const a = analyze(sess, samples, events);
+  current = {sess, samples, events, text: reportText(sess, a, events)};
+  $('report').textContent = current.text;
+}
+async function copyText(text, what){
+  const done = m => { $('copied').textContent = m; };
+  try { await navigator.clipboard.writeText(text); $('fallback').style.display = 'none'; done(what + ' copied.'); return; } catch {}
+  const f = $('fallback'); f.style.display = 'block'; f.value = text; f.focus(); f.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch {}
+  done(ok ? what + ' copied.' : 'Press and hold the text in the box, Select All, then Copy.');
+}
+async function saveFile(){
+  if (!current) return;
+  const {sess, samples, events} = current;
+  const body = JSON.stringify({format: 'heart-log-1', session: sess, samples: samples.map(s => [s.t, s.hr, s.rr, s.contact]), events: events.map(e => [e.t, e.type, e.detail])});
+  const name = 'heart-log-' + new Date(sess.start).toISOString().slice(0, 10) + '-' + sess.id + '.json';
+  const file = new File([body], name, {type: 'application/json'});
+  try {
+    if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file]}); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  const u = URL.createObjectURL(file), a = document.createElement('a');
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
+  $('copied').textContent = 'If nothing saved, use Copy minute data instead.';
+}
+
+/* ---- profiles ---- */
+function profiles(){ return store.get('profiles', {a: {name: 'Profile 1'}, b: {name: 'Profile 2'}}); }
+function renderProfiles(){
+  const p = profiles(), sel = $('profile'), cur = store.get('profile', 'a');
+  sel.textContent = '';
+  for (const k of Object.keys(p)) { const o = document.createElement('option'); o.value = k; o.textContent = p[k].name; sel.appendChild(o); }
+  sel.value = cur; $('pname').value = p[cur].name;
+}
+$('profile').onchange = e => { store.set('profile', e.target.value); renderProfiles(); };
+$('pname').onchange = e => { const p = profiles(), k = $('profile').value, v = e.target.value.trim(); if (v) { p[k].name = v; store.set('profiles', p); } renderProfiles(); };
+
+$('start').onclick = start;
+$('stop').onclick = stop;
+$('sessions').onchange = e => show(e.target.value);
+$('copy').onclick = () => current && copyText(current.text, 'Report');
+$('copyMin').onclick = () => current && copyText(minuteData(current.samples), 'Minute data');
+$('file').onclick = saveFile;
+$('nightBtn').onclick = () => { $('night').style.display = 'flex'; };
+$('night').onclick = () => { $('night').style.display = 'none'; };
+document.addEventListener('visibilitychange', () => {
+  if (!running) return;
+  logEvent('visibility', document.visibilityState);
+  if (document.visibilityState === 'visible') { keepAwake(); if (!device.gatt.connected) reconnectLoop(); } else flush();
+});
+window.addEventListener('pagehide', () => { if (running) flush(); });
+
+(async () => {
+  renderProfiles();
+  await openDB();
+  if (memOnly) notice('This browser cannot save to the phone, so keep the page open and copy the report before closing it.');
+  await refreshSessions();
+})();
+</script>
+</body>
+</html>
