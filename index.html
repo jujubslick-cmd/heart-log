@@ -123,7 +123,7 @@ function parseHR(dv){
   const rr = [];
   if (f & 16) for (; i + 1 < dv.byteLength; i += 2) rr.push(Math.round(dv.getUint16(i, true) * 1000 / 1024));
   const contact = (f & 4) ? !!(f & 2) : null;
-  return {hr, rr, contact};
+  return {hr, rr, contact, flags: f, len: dv.byteLength};
 }
 
 /* ---- local database, raw data stays on this phone ---- */
@@ -183,11 +183,11 @@ function flush(){
 function notice(t){ const n = $('notice'); n.textContent = t; n.style.display = t ? 'block' : 'none'; }
 
 function onHR(ev){
-  const {hr, rr, contact} = parseHR(ev.target.value), t = Date.now();
+  const {hr, rr, contact, flags, len} = parseHR(ev.target.value), t = Date.now();
   if (stats.lastT && t - stats.lastT < GAP_MS) stats.covered += t - stats.lastT;
   stats.lastT = t; stats.samples++; if (rr.length) stats.withRR++;
   lastSample = t;
-  sBuf.push({session: session.id, t, hr, rr, contact});
+  sBuf.push({session: session.id, t, hr, rr, contact, flags, len});
   recent.push([t, hr]);
   if (recent.length > 800) recent.splice(0, 200);
   $('bpm').textContent = hr || '--';
@@ -385,11 +385,13 @@ function analyze(sess, samples, events){
   const count = t => events.filter(e => e.type === t).length;
   const bats = events.filter(e => e.type === 'battery');
   const noContact = samples.filter(s => s.contact === false).length;
+  const formats = {};
+  for (const s of samples) if (s.flags !== undefined) { const k = 'flags ' + s.flags.toString(16).padStart(2, '0') + ', ' + s.len + ' bytes'; formats[k] = (formats[k] || 0) + 1; }
   const pct = dur ? Math.min(100, 100 * covered / dur) : 0;
   const hrv = nightHRV(samples);
   const hours = new Map();
   for (const s of samples) { const k = Math.floor(s.t / 3600000); hours.set(k, (hours.get(k) || 0) + 1); }
-  return {dur, covered, pct, gaps, count, bats, noContact, withRR, hrv, hours, n: samples.length,
+  return {formats, dur, covered, pct, gaps, count, bats, noContact, withRR, hrv, hours, n: samples.length,
     hrAvg: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null,
     hrMin: hrs.length ? Math.min(...hrs) : null, hrMax: hrs.length ? Math.max(...hrs) : null};
 }
@@ -406,6 +408,7 @@ function reportText(sess, a, events){
     'Result: ' + verdict,
     '',
     'Readings: ' + a.n + '   With beat timing: ' + (a.n ? Math.round(100 * a.withRR / a.n) : 0) + '%',
+    'Data formats: ' + (Object.entries(a.formats).map(([k, v]) => k + ' x' + v).join('; ') || 'not recorded'),
     'Heart rate low/avg/high: ' + a.hrMin + ' / ' + a.hrAvg + ' / ' + a.hrMax,
     'HRV, 2 to 6 a.m.: ' + (a.hrv.value ? a.hrv.value.toFixed(1) + ' ms (' + a.hrv.epochs + ' five-minute windows)' : 'not enough data'),
     'Readings marked no skin contact: ' + a.noContact,
